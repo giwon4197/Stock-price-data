@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Generated datasets
+data/**/*.csv
+data/**/*.parquet
+data/**/*.feather
+data/**/*.pkl
+
+# Generated logs and reports
+logs/**/*.csv
+logs/**/*.log
+
+# Local environment
+.env
+.env.*
