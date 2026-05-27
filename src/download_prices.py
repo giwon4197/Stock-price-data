@@ -11,10 +11,11 @@ import pandas as pd
 import yfinance as yf
 
 from common import (
+    DB_PRICE_COLUMNS,
     EXCHANGES,
     LEGACY_RAW_DAILY_DIR,
-    PRICE_COLUMNS,
     csv_safe_ticker,
+    current_listing_file,
     ensure_project_dirs,
     exchange_key,
     failed_log_file,
@@ -28,9 +29,16 @@ def _empty_failure_log() -> pd.DataFrame:
     return pd.DataFrame(columns=["ticker", "exchange", "error_message", "failed_at", "retry_count"])
 
 
-def _normalize_download(df: pd.DataFrame, ticker: str, downloaded_at: str) -> pd.DataFrame:
+def _normalize_download(
+    df: pd.DataFrame,
+    ticker: str,
+    exchange: str,
+    security_id: str,
+    listing_id: str,
+    downloaded_at: str,
+) -> pd.DataFrame:
     if df.empty:
-        return pd.DataFrame(columns=PRICE_COLUMNS)
+        return pd.DataFrame(columns=DB_PRICE_COLUMNS)
 
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
@@ -47,17 +55,20 @@ def _normalize_download(df: pd.DataFrame, ticker: str, downloaded_at: str) -> pd
         }
     )
     renamed["date"] = pd.to_datetime(renamed["date"]).dt.date.astype(str)
+    renamed["security_id"] = security_id
+    renamed["listing_id"] = listing_id
     renamed["ticker"] = ticker
+    renamed["exchange"] = exchange
     renamed["source"] = "Yahoo Finance"
     renamed["downloaded_at"] = downloaded_at
 
     for col in ["open", "high", "low", "close", "adj_close", "volume"]:
         renamed[col] = pd.to_numeric(renamed[col], errors="coerce")
 
-    return renamed[PRICE_COLUMNS].sort_values("date")
+    return renamed[DB_PRICE_COLUMNS].sort_values("date")
 
 
-def download_one(ticker: str) -> pd.DataFrame:
+def download_one(ticker: str, exchange: str = "", security_id: str = "", listing_id: str = "") -> pd.DataFrame:
     downloaded_at = datetime.now(timezone.utc).isoformat()
     data = yf.download(
         yahoo_symbol(ticker),
@@ -67,12 +78,21 @@ def download_one(ticker: str) -> pd.DataFrame:
         progress=False,
         threads=False,
     )
-    return _normalize_download(data, ticker=ticker, downloaded_at=downloaded_at)
+    return _normalize_download(
+        data,
+        ticker=ticker,
+        exchange=exchange,
+        security_id=security_id,
+        listing_id=listing_id,
+        downloaded_at=downloaded_at,
+    )
 
 
 def download_with_retries(
     ticker: str,
     exchange: str,
+    security_id: str,
+    listing_id: str,
     output: Path,
     retries: int,
     sleep_seconds: float,
@@ -80,7 +100,7 @@ def download_with_retries(
     last_error = ""
     for retry_count in range(retries + 1):
         try:
-            prices = download_one(ticker)
+            prices = download_one(ticker, exchange=exchange, security_id=security_id, listing_id=listing_id)
             if prices.empty:
                 raise RuntimeError("empty data")
             output.parent.mkdir(parents=True, exist_ok=True)
@@ -141,7 +161,8 @@ def main() -> None:
     args = parser.parse_args()
 
     exchange = exchange_key(args.exchange)
-    tickers_path = args.tickers or ticker_file(exchange)
+    reference_tickers_path = current_listing_file(exchange)
+    tickers_path = args.tickers or (reference_tickers_path if reference_tickers_path.exists() else ticker_file(exchange))
     output_dir = args.output_dir or raw_daily_dir(exchange)
     failed_log = args.failed_log or failed_log_file(exchange)
 
@@ -152,11 +173,13 @@ def main() -> None:
 
     workers = max(1, min(args.workers, 6))
     failures: list[dict[str, object]] = []
-    jobs: list[tuple[str, str, Path]] = []
+    jobs: list[tuple[str, str, str, str, Path]] = []
     skipped = 0
     for row in universe.itertuples(index=False):
         ticker = str(row.ticker).strip()
-        exchange = getattr(row, "exchange", "")
+        row_exchange = str(getattr(row, "exchange", "")).strip()
+        security_id = str(getattr(row, "security_id", "")).strip()
+        listing_id = str(getattr(row, "listing_id", "")).strip()
         output = output_dir / f"{csv_safe_ticker(ticker)}.csv"
         legacy_output = LEGACY_RAW_DAILY_DIR / f"{csv_safe_ticker(ticker)}.csv"
 
@@ -171,7 +194,7 @@ def main() -> None:
             skipped += 1
             continue
 
-        jobs.append((ticker, exchange, output))
+        jobs.append((ticker, row_exchange, security_id, listing_id, output))
 
     total = len(jobs) + skipped
     done = skipped
@@ -186,8 +209,8 @@ def main() -> None:
     if not jobs:
         print("no pending downloads")
     elif workers == 1:
-        for ticker, exchange, output in jobs:
-            failure = download_with_retries(ticker, exchange, output, args.retries, args.sleep)
+        for ticker, row_exchange, security_id, listing_id, output in jobs:
+            failure = download_with_retries(ticker, row_exchange, security_id, listing_id, output, args.retries, args.sleep)
             if failure:
                 failures.append(failure)
             done += 1
@@ -200,12 +223,14 @@ def main() -> None:
                 executor.submit(
                     download_with_retries,
                     ticker,
-                    exchange,
+                    row_exchange,
+                    security_id,
+                    listing_id,
                     output,
                     args.retries,
                     args.sleep,
                 ): ticker
-                for ticker, exchange, output in jobs
+                for ticker, row_exchange, security_id, listing_id, output in jobs
             }
             for future in as_completed(futures):
                 failure = future.result()

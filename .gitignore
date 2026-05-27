@@ -9,6 +9,10 @@ data/**/*.csv
 data/**/*.parquet
 data/**/*.feather
 data/**/*.pkl
+data/**/*.sqlite
+data/**/*.sqlite-journal
+data/**/*.sqlite-wal
+data/**/*.sqlite-shm
 
 # Generated logs and reports
 logs/**/*.csv

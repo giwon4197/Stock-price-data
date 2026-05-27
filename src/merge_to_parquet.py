@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from common import EXCHANGES, PRICE_COLUMNS, daily_csv_files, ensure_project_dirs, exchange_key, parquet_file, raw_daily_dir
+from common import DB_PRICE_COLUMNS, EXCHANGES, daily_csv_files, ensure_project_dirs, exchange_key, parquet_file, raw_daily_dir
 
 
 def main() -> None:
@@ -22,17 +22,17 @@ def main() -> None:
     frames = []
     for path in daily_csv_files(input_dir, include_legacy=exchange == "nasdaq"):
         df = pd.read_csv(path)
-        missing = set(PRICE_COLUMNS).difference(df.columns)
-        if missing:
-            raise ValueError(f"{path} is missing columns: {', '.join(sorted(missing))}")
-        frames.append(df[PRICE_COLUMNS])
+        for column in DB_PRICE_COLUMNS:
+            if column not in df:
+                df[column] = ""
+        frames.append(df[DB_PRICE_COLUMNS])
 
     if frames:
         merged = pd.concat(frames, ignore_index=True)
         merged["date"] = pd.to_datetime(merged["date"], errors="coerce")
-        merged = merged.sort_values(["ticker", "date"])
+        merged = merged.sort_values(["security_id", "ticker", "date"])
     else:
-        merged = pd.DataFrame(columns=PRICE_COLUMNS)
+        merged = pd.DataFrame(columns=DB_PRICE_COLUMNS)
 
     output.parent.mkdir(parents=True, exist_ok=True)
     merged.to_parquet(output, index=False)

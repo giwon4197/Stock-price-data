@@ -6,6 +6,7 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT_DIR / "data"
 TICKERS_DIR = DATA_DIR / "tickers"
+REFERENCE_DIR = DATA_DIR / "reference"
 EXCHANGES = ("nasdaq", "nyse", "amex", "cboe", "iex")
 DEFAULT_EXCHANGE = "nasdaq"
 RAW_DAILY_DIR = DATA_DIR / "raw" / DEFAULT_EXCHANGE / "daily"
@@ -14,11 +15,34 @@ INDEX_DAILY_DIR = DATA_DIR / "index" / "daily"
 METADATA_DIR = DATA_DIR / "metadata"
 PROCESSED_DIR = DATA_DIR / "processed"
 LOGS_DIR = ROOT_DIR / "logs"
+SCHEMA_FILE = ROOT_DIR / "schema.sql"
+SECURITY_MASTER_FILE = REFERENCE_DIR / "security_master.csv"
+LISTING_EVENTS_FILE = REFERENCE_DIR / "listing_events.csv"
+TICKER_ALIASES_FILE = REFERENCE_DIR / "ticker_aliases.csv"
+MANUAL_OVERRIDES_FILE = REFERENCE_DIR / "manual_overrides.csv"
+CURRENT_LISTINGS_FILE = REFERENCE_DIR / "current_listings.csv"
+DATABASE_FILE = PROCESSED_DIR / "market_data.sqlite"
 
 
 PRICE_COLUMNS = [
     "date",
     "ticker",
+    "open",
+    "high",
+    "low",
+    "close",
+    "adj_close",
+    "volume",
+    "source",
+    "downloaded_at",
+]
+
+DB_PRICE_COLUMNS = [
+    "date",
+    "security_id",
+    "listing_id",
+    "ticker",
+    "exchange",
     "open",
     "high",
     "low",
@@ -39,6 +63,10 @@ def exchange_key(exchange: str) -> str:
 
 def ticker_file(exchange: str) -> Path:
     return TICKERS_DIR / f"{exchange_key(exchange)}_universe.csv"
+
+
+def current_listing_file(exchange: str) -> Path:
+    return REFERENCE_DIR / f"{exchange_key(exchange)}_current_listings.csv"
 
 
 def raw_daily_dir(exchange: str) -> Path:
@@ -65,6 +93,7 @@ def ensure_project_dirs(exchange: str | None = None) -> None:
     raw_dir = raw_daily_dir(exchange or DEFAULT_EXCHANGE)
     for path in [
         TICKERS_DIR,
+        REFERENCE_DIR,
         raw_dir,
         INDEX_DAILY_DIR,
         METADATA_DIR,
