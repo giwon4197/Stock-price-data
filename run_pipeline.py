@@ -43,6 +43,8 @@ def main() -> None:
     parser.add_argument("--retries", type=int, default=3, help="Retry count for each ticker.")
     parser.add_argument("--postprocess", action="store_true", help="Run validation and metadata after downloads.")
     parser.add_argument("--parquet", action="store_true", help="Run parquet merge after postprocess.")
+    parser.add_argument("--sqlite", action="store_true", help="Export normalized DB tables to SQLite.")
+    parser.add_argument("--skip-reference", action="store_true", help="Skip security/listing reference table build.")
     parser.add_argument("--skip-index", action="store_true", help="Skip major index downloads.")
     args = parser.parse_args()
 
@@ -50,6 +52,9 @@ def main() -> None:
     steps = []
     for exchange in args.exchanges:
         steps.append([python, "src/fetch_tickers.py", "--exchange", exchange])
+
+    if not args.skip_reference:
+        steps.append([python, "src/build_reference.py", "--exchanges", *args.exchanges])
 
     for exchange in args.exchanges:
         download_command = [
@@ -86,6 +91,9 @@ def main() -> None:
         if args.force:
             index_command.append("--force")
         steps.append(index_command)
+
+    if args.sqlite:
+        steps.append([python, "src/export_sqlite.py"])
 
     for step in steps:
         run_step(step)
