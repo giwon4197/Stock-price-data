@@ -7,7 +7,7 @@ from pathlib import Path
 import pandas as pd
 import yfinance as yf
 
-from common import INDEX_DAILY_DIR, PRICE_COLUMNS, ensure_project_dirs
+from common import INDEX_DAILY_DIR, OHLCV_COLUMNS, PRICE_COLUMNS, ensure_project_dirs
 
 
 INDEX_SYMBOLS = {
@@ -44,7 +44,7 @@ def normalize_index_download(df: pd.DataFrame, index_name: str, downloaded_at: s
     renamed["source"] = "Yahoo Finance"
     renamed["downloaded_at"] = downloaded_at
 
-    for col in ["open", "high", "low", "close", "adj_close", "volume"]:
+    for col in OHLCV_COLUMNS:
         renamed[col] = pd.to_numeric(renamed.get(col), errors="coerce")
 
     return renamed[PRICE_COLUMNS].sort_values("date")

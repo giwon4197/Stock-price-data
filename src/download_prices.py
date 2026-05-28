@@ -14,6 +14,7 @@ from common import (
     DB_PRICE_COLUMNS,
     EXCHANGES,
     LEGACY_RAW_DAILY_DIR,
+    OHLCV_COLUMNS,
     csv_safe_ticker,
     current_listing_file,
     ensure_project_dirs,
@@ -62,7 +63,7 @@ def _normalize_download(
     renamed["source"] = "Yahoo Finance"
     renamed["downloaded_at"] = downloaded_at
 
-    for col in ["open", "high", "low", "close", "adj_close", "volume"]:
+    for col in OHLCV_COLUMNS:
         renamed[col] = pd.to_numeric(renamed[col], errors="coerce")
 
     return renamed[DB_PRICE_COLUMNS].sort_values("date")

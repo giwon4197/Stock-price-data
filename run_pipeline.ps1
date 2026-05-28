@@ -1,5 +1,3 @@
-$ErrorActionPreference = "Stop"
-
 param(
     [string]$Exchanges = "all",
     [int]$Workers = 6,
@@ -9,8 +7,12 @@ param(
     [int]$Retries = 3,
     [switch]$Postprocess,
     [switch]$Parquet,
+    [switch]$Sqlite,
+    [switch]$SkipReference,
     [switch]$SkipIndex
 )
+
+$ErrorActionPreference = "Stop"
 
 $argsList = @(
     "run_pipeline.py",
@@ -34,6 +36,14 @@ if ($Postprocess) {
 
 if ($Parquet) {
     $argsList += "--parquet"
+}
+
+if ($Sqlite) {
+    $argsList += "--sqlite"
+}
+
+if ($SkipReference) {
+    $argsList += "--skip-reference"
 }
 
 if ($SkipIndex) {

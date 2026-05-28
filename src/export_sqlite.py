@@ -12,11 +12,13 @@ from common import (
     EXCHANGES,
     INDEX_DAILY_DIR,
     LISTING_EVENTS_FILE,
+    OHLCV_COLUMNS,
     SCHEMA_FILE,
     SECURITY_MASTER_FILE,
     TICKER_ALIASES_FILE,
     current_listing_file,
     daily_csv_files,
+    ensure_columns,
     ensure_project_dirs,
     raw_daily_dir,
 )
@@ -86,10 +88,7 @@ def build_listing_lookup(current_listings: pd.DataFrame) -> dict[tuple[str, str]
 
 
 def normalize_price_frame(df: pd.DataFrame, fallback_exchange: str, lookup: dict[tuple[str, str], dict[str, str]]) -> pd.DataFrame:
-    normalized = df.copy()
-    for column in DB_PRICE_COLUMNS:
-        if column not in normalized:
-            normalized[column] = ""
+    normalized = ensure_columns(df.copy(), DB_PRICE_COLUMNS)
 
     if "exchange" not in df or normalized["exchange"].astype(str).str.strip().eq("").all():
         normalized["exchange"] = fallback_exchange.upper()
@@ -112,7 +111,7 @@ def normalize_price_frame(df: pd.DataFrame, fallback_exchange: str, lookup: dict
         )
 
     normalized = normalized[DB_PRICE_COLUMNS].rename(columns={"date": "price_date"})
-    for column in ["open", "high", "low", "close", "adj_close", "volume"]:
+    for column in OHLCV_COLUMNS:
         normalized[column] = pd.to_numeric(normalized[column], errors="coerce")
     return normalized.drop_duplicates(["price_date", "ticker", "security_id", "listing_id"])
 
@@ -139,7 +138,7 @@ def load_index_prices(connection: sqlite3.Connection) -> None:
     for path in sorted(INDEX_DAILY_DIR.glob("*.csv")):
         df = pd.read_csv(path, dtype=str).fillna("")
         df = df.rename(columns={"date": "price_date", "ticker": "index_id"})
-        for column in ["open", "high", "low", "close", "adj_close", "volume"]:
+        for column in OHLCV_COLUMNS:
             df[column] = pd.to_numeric(df[column], errors="coerce")
         columns = [
             "price_date",

@@ -11,6 +11,7 @@ from common import (
     LISTING_EVENTS_FILE,
     csv_safe_ticker,
     daily_csv_files,
+    ensure_columns,
     ensure_project_dirs,
     exchange_key,
     raw_daily_dir,
@@ -52,14 +53,9 @@ def apply_listing_ids(df: pd.DataFrame, listings: pd.DataFrame, fallback_exchang
     if df.empty:
         return df
 
-    result = df.copy()
-    for column in DB_PRICE_COLUMNS:
-        if column not in result:
-            result[column] = ""
+    result = ensure_columns(df.copy(), DB_PRICE_COLUMNS)
 
     ticker = str(result["ticker"].dropna().iloc[0]).strip() if result["ticker"].astype(str).str.strip().any() else ""
-    if not ticker:
-        ticker = ""
     exchange = (
         str(result["exchange"].dropna().iloc[0]).strip()
         if result["exchange"].astype(str).str.strip().any()

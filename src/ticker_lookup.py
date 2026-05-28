@@ -8,13 +8,11 @@ import pandas as pd
 
 from annotate_price_csvs import annotate_file, load_listings
 from common import (
-    CURRENT_LISTINGS_FILE,
     EXCHANGES,
     LISTING_EVENTS_FILE,
     SECURITY_MASTER_FILE,
     TICKER_ALIASES_FILE,
     csv_safe_ticker,
-    current_listing_file,
     raw_daily_dir,
 )
 
@@ -177,7 +175,7 @@ def main() -> None:
     parser.add_argument("--output-root", type=Path, default=Path("data") / "curated")
     args = parser.parse_args()
 
-    if not LISTING_EVENTS_FILE.exists() or not CURRENT_LISTINGS_FILE.exists():
+    if not LISTING_EVENTS_FILE.exists():
         raise SystemExit("reference tables are missing. Run: python src/build_reference.py")
 
     result = build_result(args.query)

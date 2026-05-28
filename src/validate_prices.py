@@ -5,7 +5,16 @@ from pathlib import Path
 
 import pandas as pd
 
-from common import EXCHANGES, daily_csv_files, ensure_project_dirs, exchange_key, raw_daily_dir, validation_report_file
+from common import (
+    EXCHANGES,
+    OHLCV_COLUMNS,
+    PRICE_VALUE_COLUMNS,
+    daily_csv_files,
+    ensure_project_dirs,
+    exchange_key,
+    raw_daily_dir,
+    validation_report_file,
+)
 
 
 def validate_file(path: Path) -> dict[str, object]:
@@ -36,12 +45,12 @@ def validate_file(path: Path) -> dict[str, object]:
             "status": "EMPTY",
         }
 
-    for col in ["open", "high", "low", "close", "adj_close", "volume"]:
+    for col in OHLCV_COLUMNS:
         df[col] = pd.to_numeric(df.get(col), errors="coerce")
 
     duplicate_count = int(df.duplicated(subset=["date"]).sum())
     missing_count = int(df.isna().sum().sum())
-    negative_price = (df[["open", "high", "low", "close", "adj_close"]] < 0).any(axis=1)
+    negative_price = (df[PRICE_VALUE_COLUMNS] < 0).any(axis=1)
     negative_volume = df["volume"] < 0
     invalid_ohlc = (
         (df["high"] < df["low"])

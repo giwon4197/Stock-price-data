@@ -37,6 +37,9 @@ PRICE_COLUMNS = [
     "downloaded_at",
 ]
 
+OHLCV_COLUMNS = ["open", "high", "low", "close", "adj_close", "volume"]
+PRICE_VALUE_COLUMNS = ["open", "high", "low", "close", "adj_close"]
+
 DB_PRICE_COLUMNS = [
     "date",
     "security_id",
@@ -110,6 +113,13 @@ def yahoo_symbol(ticker: str) -> str:
 def csv_safe_ticker(ticker: str) -> str:
     safe = ticker.strip().replace("/", "-").replace("\\", "-")
     return safe.replace(":", "-")
+
+
+def ensure_columns(frame, columns: list[str], fill_value: str = ""):
+    for column in columns:
+        if column not in frame:
+            frame[column] = fill_value
+    return frame
 
 
 def daily_csv_files(input_dir: Path, include_legacy: bool = False) -> list[Path]:

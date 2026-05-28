@@ -5,7 +5,16 @@ from pathlib import Path
 
 import pandas as pd
 
-from common import DB_PRICE_COLUMNS, EXCHANGES, daily_csv_files, ensure_project_dirs, exchange_key, parquet_file, raw_daily_dir
+from common import (
+    DB_PRICE_COLUMNS,
+    EXCHANGES,
+    daily_csv_files,
+    ensure_columns,
+    ensure_project_dirs,
+    exchange_key,
+    parquet_file,
+    raw_daily_dir,
+)
 
 
 def main() -> None:
@@ -22,10 +31,7 @@ def main() -> None:
     frames = []
     for path in daily_csv_files(input_dir, include_legacy=exchange == "nasdaq"):
         df = pd.read_csv(path)
-        for column in DB_PRICE_COLUMNS:
-            if column not in df:
-                df[column] = ""
-        frames.append(df[DB_PRICE_COLUMNS])
+        frames.append(ensure_columns(df, DB_PRICE_COLUMNS)[DB_PRICE_COLUMNS])
 
     if frames:
         merged = pd.concat(frames, ignore_index=True)
