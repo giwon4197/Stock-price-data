@@ -221,6 +221,21 @@ def build_tables(rows: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.Dat
     return securities, listings, aliases, current_listings
 
 
+def apply_manual_precedence(current_rows: pd.DataFrame, manual_rows: pd.DataFrame) -> pd.DataFrame:
+    if current_rows.empty or manual_rows.empty:
+        return current_rows
+
+    manual = normalize_reference_rows(manual_rows)
+    manual_current = manual[manual["is_current"]]
+    if manual_current.empty:
+        return current_rows
+
+    manual_keys = set(zip(manual_current["ticker"].str.upper(), manual_current["exchange"].str.upper()))
+    current = normalize_reference_rows(current_rows)
+    current_keys = list(zip(current["ticker"].str.upper(), current["exchange"].str.upper()))
+    return current[[key not in manual_keys for key in current_keys]]
+
+
 def write_exchange_current_files(current_listings: pd.DataFrame) -> None:
     for exchange in EXCHANGES:
         exchange_name = exchange.upper()
@@ -237,6 +252,7 @@ def main() -> None:
     ensure_project_dirs()
     current_rows = build_current_rows(args.exchanges)
     manual_rows = load_manual_overrides(args.manual_overrides)
+    current_rows = apply_manual_precedence(current_rows, manual_rows)
     combined = pd.concat([current_rows, manual_rows], ignore_index=True)
     combined = combined.drop_duplicates(["security_id", "ticker", "exchange", "start_date", "end_date"], keep="last")
 

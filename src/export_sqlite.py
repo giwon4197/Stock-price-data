@@ -16,7 +16,6 @@ from common import (
     SCHEMA_FILE,
     SECURITY_MASTER_FILE,
     TICKER_ALIASES_FILE,
-    current_listing_file,
     daily_csv_files,
     ensure_columns,
     ensure_project_dirs,
@@ -46,6 +45,7 @@ def reset_schema(connection: sqlite3.Connection) -> None:
 
 
 def load_reference_tables(connection: sqlite3.Connection) -> pd.DataFrame:
+    listings = pd.DataFrame(columns=["ticker", "exchange", "security_id", "listing_id", "start_date", "end_date"])
     for table, path in REFERENCE_TABLES:
         if not path.exists():
             print(f"skip missing reference table: {path}")
@@ -53,41 +53,68 @@ def load_reference_tables(connection: sqlite3.Connection) -> pd.DataFrame:
         df = pd.read_csv(path, dtype=str).fillna("")
         if table == "listings" and "is_current" in df:
             df["is_current"] = df["is_current"].map(lambda value: 1 if str(value).lower() in {"true", "1"} else 0)
+            listings = df.copy()
         df.to_sql(table, connection, if_exists="append", index=False)
         print(f"loaded {len(df):,} rows into {table}")
 
-    current_frames = []
-    for exchange in EXCHANGES:
-        path = current_listing_file(exchange)
-        if path.exists():
-            current_frames.append(pd.read_csv(path, dtype=str).fillna(""))
-    if current_frames:
-        return pd.concat(current_frames, ignore_index=True)
-    return pd.DataFrame(columns=["ticker", "exchange", "security_id", "listing_id"])
+    return listings
 
 
-def build_listing_lookup(current_listings: pd.DataFrame) -> dict[tuple[str, str], dict[str, str]]:
-    lookup = {}
-    for row in current_listings.itertuples(index=False):
-        ticker = str(row.ticker).strip().upper()
-        exchange = str(row.exchange).strip().upper()
-        lookup[(ticker, exchange)] = {
-            "security_id": str(row.security_id).strip(),
-            "listing_id": str(row.listing_id).strip(),
-            "exchange": exchange,
-        }
-        lookup.setdefault(
-            (ticker, ""),
-            {
-                "security_id": str(row.security_id).strip(),
-                "listing_id": str(row.listing_id).strip(),
-                "exchange": exchange,
-            },
-        )
+def build_listing_lookup(listings: pd.DataFrame) -> dict[tuple[str, str], pd.DataFrame]:
+    lookup: dict[tuple[str, str], pd.DataFrame] = {}
+    if listings.empty:
+        return lookup
+
+    normalized = listings.copy()
+    normalized["ticker_key"] = normalized["ticker"].astype(str).str.strip().str.upper()
+    normalized["exchange_key"] = normalized["exchange"].astype(str).str.strip().str.upper()
+    normalized["start_dt"] = pd.to_datetime(normalized["start_date"], errors="coerce")
+    normalized["end_dt"] = pd.to_datetime(normalized["end_date"], errors="coerce")
+    normalized["is_current_bool"] = normalized["is_current"].map(lambda value: str(value).lower() in {"true", "1"})
+
+    for (ticker, exchange), group in normalized.groupby(["ticker_key", "exchange_key"], sort=False):
+        lookup[(ticker, exchange)] = group.copy()
+        lookup.setdefault((ticker, ""), group.copy())
     return lookup
 
 
-def normalize_price_frame(df: pd.DataFrame, fallback_exchange: str, lookup: dict[tuple[str, str], dict[str, str]]) -> pd.DataFrame:
+def apply_listing_history(normalized: pd.DataFrame, listings: pd.DataFrame) -> pd.DataFrame:
+    if listings.empty:
+        return normalized
+
+    dates = pd.to_datetime(normalized["date"], errors="coerce")
+    for listing in listings.itertuples(index=False):
+        mask = pd.Series(True, index=normalized.index)
+        if pd.notna(listing.start_dt):
+            mask &= dates >= listing.start_dt
+        if pd.notna(listing.end_dt):
+            mask &= dates <= listing.end_dt
+        if not mask.any():
+            continue
+        normalized.loc[mask, "security_id"] = normalized.loc[mask, "security_id"].where(
+            normalized.loc[mask, "security_id"].astype(str).str.strip().ne(""),
+            listing.security_id,
+        )
+        normalized.loc[mask, "listing_id"] = normalized.loc[mask, "listing_id"].where(
+            normalized.loc[mask, "listing_id"].astype(str).str.strip().ne(""),
+            listing.listing_id,
+        )
+        normalized.loc[mask, "exchange"] = normalized.loc[mask, "exchange"].where(
+            normalized.loc[mask, "exchange"].astype(str).str.strip().ne(""),
+            listing.exchange,
+        )
+
+    missing = normalized["security_id"].astype(str).str.strip().eq("")
+    if missing.any():
+        current = listings[listings["is_current_bool"]]
+        selected = current.iloc[-1] if not current.empty else listings.iloc[-1]
+        normalized.loc[missing, "security_id"] = selected["security_id"]
+        normalized.loc[missing, "listing_id"] = selected["listing_id"]
+        normalized.loc[missing, "exchange"] = selected["exchange"]
+    return normalized
+
+
+def normalize_price_frame(df: pd.DataFrame, fallback_exchange: str, lookup: dict[tuple[str, str], pd.DataFrame]) -> pd.DataFrame:
     normalized = ensure_columns(df.copy(), DB_PRICE_COLUMNS)
 
     if "exchange" not in df or normalized["exchange"].astype(str).str.strip().eq("").all():
@@ -95,20 +122,10 @@ def normalize_price_frame(df: pd.DataFrame, fallback_exchange: str, lookup: dict
 
     ticker = str(normalized["ticker"].dropna().iloc[0]).strip().upper() if not normalized.empty else ""
     exchange = str(normalized["exchange"].dropna().iloc[0]).strip().upper() if not normalized.empty else ""
-    listing = lookup.get((ticker, exchange)) or lookup.get((ticker, ""))
-    if listing:
-        normalized["security_id"] = normalized["security_id"].where(
-            normalized["security_id"].astype(str).str.strip().ne(""),
-            listing["security_id"],
-        )
-        normalized["listing_id"] = normalized["listing_id"].where(
-            normalized["listing_id"].astype(str).str.strip().ne(""),
-            listing["listing_id"],
-        )
-        normalized["exchange"] = normalized["exchange"].where(
-            normalized["exchange"].astype(str).str.strip().ne(""),
-            listing["exchange"],
-        )
+    listings = lookup.get((ticker, exchange))
+    if listings is None:
+        listings = lookup.get((ticker, ""), pd.DataFrame())
+    normalized = apply_listing_history(normalized, listings)
 
     normalized = normalized[DB_PRICE_COLUMNS].rename(columns={"date": "price_date"})
     for column in OHLCV_COLUMNS:
@@ -168,8 +185,8 @@ def main() -> None:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(args.output) as connection:
         reset_schema(connection)
-        current_listings = load_reference_tables(connection)
-        lookup = build_listing_lookup(current_listings)
+        listings = load_reference_tables(connection)
+        lookup = build_listing_lookup(listings)
         if not args.skip_prices:
             load_daily_prices(connection, lookup)
             load_index_prices(connection)
