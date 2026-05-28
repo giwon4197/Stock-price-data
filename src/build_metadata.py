@@ -67,7 +67,14 @@ def main() -> None:
     input_dir = args.input_dir or raw_daily_dir(exchange)
     output = args.output or metadata_file(exchange)
     ensure_project_dirs(exchange)
-    rows = [summarize_file(path) for path in daily_csv_files(input_dir, include_legacy=exchange == "nasdaq")]
+    files = daily_csv_files(input_dir, include_legacy=exchange == "nasdaq")
+    print(f"[{exchange}] summarizing {len(files):,} CSV files from {input_dir}")
+    rows = []
+    for index, path in enumerate(files, start=1):
+        rows.append(summarize_file(path))
+        if index == 1 or index % 100 == 0 or index == len(files):
+            print(f"[{exchange}] summarized {index:,}/{len(files):,} files")
+
     summary = pd.DataFrame(
         rows,
         columns=["ticker", "first_date", "last_date", "row_count", "data_years", "has_missing", "status"],

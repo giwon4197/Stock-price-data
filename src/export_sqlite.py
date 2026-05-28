@@ -38,6 +38,7 @@ DROP_TABLES = [
 
 
 def reset_schema(connection: sqlite3.Connection) -> None:
+    print("resetting SQLite schema")
     for table in DROP_TABLES:
         connection.execute(f"DROP TABLE IF EXISTS {table}")
     connection.executescript(SCHEMA_FILE.read_text(encoding="utf-8"))
@@ -133,18 +134,24 @@ def normalize_price_frame(df: pd.DataFrame, fallback_exchange: str, lookup: dict
     return normalized.drop_duplicates(["price_date", "ticker", "security_id", "listing_id"])
 
 
-def load_daily_prices(connection: sqlite3.Connection, lookup: dict[tuple[str, str], dict[str, str]]) -> None:
+def load_daily_prices(connection: sqlite3.Connection, lookup: dict[tuple[str, str], pd.DataFrame]) -> None:
     total = 0
     for exchange in EXCHANGES:
         input_dir = raw_daily_dir(exchange)
         files = daily_csv_files(input_dir, include_legacy=exchange == "nasdaq")
-        for path in files:
+        print(f"[{exchange}] loading {len(files):,} price files into SQLite")
+        exchange_total = 0
+        for index, path in enumerate(files, start=1):
             df = pd.read_csv(path, dtype=str).fillna("")
             normalized = normalize_price_frame(df, exchange, lookup)
             normalized.to_sql("daily_prices", connection, if_exists="append", index=False, chunksize=10_000)
+            exchange_total += len(normalized)
             total += len(normalized)
-        if files:
-            print(f"loaded {len(files):,} {exchange} price files")
+            if index == 1 or index % 100 == 0 or index == len(files):
+                print(
+                    f"[{exchange}] loaded {index:,}/{len(files):,} files "
+                    f"({exchange_total:,} rows)"
+                )
     print(f"loaded {total:,} rows into daily_prices")
 
 
@@ -152,7 +159,9 @@ def load_index_prices(connection: sqlite3.Connection) -> None:
     total = 0
     if not INDEX_DAILY_DIR.exists():
         return
-    for path in sorted(INDEX_DAILY_DIR.glob("*.csv")):
+    files = sorted(INDEX_DAILY_DIR.glob("*.csv"))
+    print(f"loading {len(files):,} index price files into SQLite")
+    for index, path in enumerate(files, start=1):
         df = pd.read_csv(path, dtype=str).fillna("")
         df = df.rename(columns={"date": "price_date", "ticker": "index_id"})
         for column in OHLCV_COLUMNS:
@@ -172,6 +181,7 @@ def load_index_prices(connection: sqlite3.Connection) -> None:
         df = df[columns].drop_duplicates(["price_date", "index_id"])
         df.to_sql("index_daily_prices", connection, if_exists="append", index=False, chunksize=10_000)
         total += len(df)
+        print(f"loaded index file {index:,}/{len(files):,}: {path.name} ({len(df):,} rows)")
     print(f"loaded {total:,} rows into index_daily_prices")
 
 

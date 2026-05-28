@@ -235,6 +235,18 @@ SQLite 재생성:
 python src/export_sqlite.py
 ```
 
+parquet 재생성:
+
+```powershell
+.\run_parquet.ps1
+```
+
+`run_parquet.ps1`는 거래소별 주식 parquet과 `index_daily_all.parquet`을 함께 만든다. 지수를 제외하려면:
+
+```powershell
+.\run_parquet.ps1 -SkipIndex
+```
+
 전체 파이프라인:
 
 ```powershell

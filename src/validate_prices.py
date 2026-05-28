@@ -93,7 +93,14 @@ def main() -> None:
     input_dir = args.input_dir or raw_daily_dir(exchange)
     output = args.output or validation_report_file(exchange)
     ensure_project_dirs(exchange)
-    rows = [validate_file(path) for path in daily_csv_files(input_dir, include_legacy=exchange == "nasdaq")]
+    files = daily_csv_files(input_dir, include_legacy=exchange == "nasdaq")
+    print(f"[{exchange}] validating {len(files):,} CSV files from {input_dir}")
+    rows = []
+    for index, path in enumerate(files, start=1):
+        rows.append(validate_file(path))
+        if index == 1 or index % 100 == 0 or index == len(files):
+            print(f"[{exchange}] validated {index:,}/{len(files):,} files")
+
     report = pd.DataFrame(
         rows,
         columns=[

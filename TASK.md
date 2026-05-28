@@ -140,6 +140,18 @@ SQLite 생성:
 python src/export_sqlite.py
 ```
 
+parquet 생성:
+
+```powershell
+.\run_parquet.ps1
+```
+
+지수 parquet을 제외하려면:
+
+```powershell
+.\run_parquet.ps1 -SkipIndex
+```
+
 전체 실행:
 
 ```powershell

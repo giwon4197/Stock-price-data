@@ -129,6 +129,18 @@ reference를 다시 만들고 SQLite까지 반영:
 .\run_reference.ps1 -Sqlite
 ```
 
+raw CSV를 거래소별 parquet으로 변환:
+
+```powershell
+.\run_parquet.ps1
+```
+
+기본 실행은 주식 parquet과 지수 parquet을 모두 만듭니다. 지수 parquet을 건너뛰려면:
+
+```powershell
+.\run_parquet.ps1 -SkipIndex
+```
+
 SQLite만 다시 만들기:
 
 ```powershell

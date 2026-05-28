@@ -233,7 +233,11 @@ def apply_manual_precedence(current_rows: pd.DataFrame, manual_rows: pd.DataFram
     manual_keys = set(zip(manual_current["ticker"].str.upper(), manual_current["exchange"].str.upper()))
     current = normalize_reference_rows(current_rows)
     current_keys = list(zip(current["ticker"].str.upper(), current["exchange"].str.upper()))
-    return current[[key not in manual_keys for key in current_keys]]
+    filtered = current[[key not in manual_keys for key in current_keys]]
+    removed = len(current) - len(filtered)
+    if removed:
+        print(f"manual overrides replaced {removed:,} automatic current listing rows")
+    return filtered
 
 
 def write_exchange_current_files(current_listings: pd.DataFrame) -> None:
@@ -250,11 +254,18 @@ def main() -> None:
     args = parser.parse_args()
 
     ensure_project_dirs()
+    print(f"building current rows for exchanges: {', '.join(args.exchanges)}")
     current_rows = build_current_rows(args.exchanges)
+    print(f"built {len(current_rows):,} automatic current rows")
+
+    print(f"loading manual overrides from {args.manual_overrides}")
     manual_rows = load_manual_overrides(args.manual_overrides)
+    print(f"loaded {len(manual_rows):,} manual override rows")
+
     current_rows = apply_manual_precedence(current_rows, manual_rows)
     combined = pd.concat([current_rows, manual_rows], ignore_index=True)
     combined = combined.drop_duplicates(["security_id", "ticker", "exchange", "start_date", "end_date"], keep="last")
+    print(f"building reference tables from {len(combined):,} combined rows")
 
     securities, listings, aliases, current_listings = build_tables(combined)
     SECURITY_MASTER_FILE.parent.mkdir(parents=True, exist_ok=True)

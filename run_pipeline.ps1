@@ -14,6 +14,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+Write-Host "[pipeline] preparing full pipeline"
+
 $argsList = @(
     "run_pipeline.py",
     "--exchanges", $Exchanges,
@@ -50,4 +52,6 @@ if ($SkipIndex) {
     $argsList += "--skip-index"
 }
 
+Write-Host "[pipeline] running: python $($argsList -join ' ')"
 python @argsList
+Write-Host "[pipeline] pipeline complete"
