@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pandas as pd
 
-from annotate_price_csvs import annotate_file, load_listings
 from common import (
     EXCHANGES,
     LISTING_EVENTS_FILE,
@@ -73,11 +72,8 @@ def price_paths_for_ticker(ticker: str) -> list[str]:
     paths = []
     for exchange in EXCHANGES:
         raw_path = raw_daily_dir(exchange) / f"{safe}.csv"
-        curated_path = Path("data") / "curated" / exchange / "daily" / f"{safe}.csv"
         if raw_path.exists():
             paths.append(str(raw_path))
-        if curated_path.exists():
-            paths.append(str(curated_path))
     return paths
 
 
@@ -143,44 +139,16 @@ def print_human(result: dict[str, object]) -> None:
                 print(f"  - {path}")
 
 
-def annotate_matches(result: dict[str, object], output_root: Path) -> None:
-    listings = load_listings(LISTING_EVENTS_FILE)
-    seen: set[tuple[str, str]] = set()
-    for match in result["matches"]:
-        for listing in match["listings"]:
-            ticker = str(listing.get("ticker", "")).strip()
-            exchange = str(listing.get("exchange", "")).strip().lower()
-            if not ticker or exchange not in EXCHANGES:
-                continue
-            key = (ticker.upper(), exchange)
-            if key in seen:
-                continue
-            seen.add(key)
-            input_path = raw_daily_dir(exchange) / f"{csv_safe_ticker(ticker)}.csv"
-            if not input_path.exists():
-                continue
-            output_dir = output_root / exchange / "daily"
-            annotate_file(input_path, listings, exchange, output_dir, inplace=False)
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description="Resolve a ticker/name/security_id to security/listing IDs.")
     parser.add_argument("query", help="Ticker, security_id, or issuer-name text to search.")
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
-    parser.add_argument(
-        "--annotate",
-        action="store_true",
-        help="Write curated CSV files for matched tickers using security/listing IDs.",
-    )
-    parser.add_argument("--output-root", type=Path, default=Path("data") / "curated")
     args = parser.parse_args()
 
     if not LISTING_EVENTS_FILE.exists():
         raise SystemExit("reference tables are missing. Run: python src/build_reference.py")
 
     result = build_result(args.query)
-    if args.annotate:
-        annotate_matches(result, args.output_root)
 
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
