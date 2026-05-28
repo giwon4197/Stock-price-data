@@ -217,6 +217,18 @@ reference 재생성:
 python src/build_reference.py
 ```
 
+전용 실행 파일:
+
+```powershell
+.\run_reference.ps1
+```
+
+reference 재생성 후 SQLite 반영:
+
+```powershell
+.\run_reference.ps1 -Sqlite
+```
+
 SQLite 재생성:
 
 ```powershell

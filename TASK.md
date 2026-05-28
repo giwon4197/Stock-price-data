@@ -109,6 +109,18 @@ data/processed/
 python src/build_reference.py
 ```
 
+또는 전용 실행 파일:
+
+```powershell
+.\run_reference.ps1
+```
+
+reference 재생성 후 SQLite까지 반영:
+
+```powershell
+.\run_reference.ps1 -Sqlite
+```
+
 가격 다운로드:
 
 ```powershell

@@ -117,6 +117,18 @@ reference 테이블 다시 만들기:
 python src/build_reference.py
 ```
 
+reference 전용 실행 파일 사용:
+
+```powershell
+.\run_reference.ps1
+```
+
+reference를 다시 만들고 SQLite까지 반영:
+
+```powershell
+.\run_reference.ps1 -Sqlite
+```
+
 SQLite만 다시 만들기:
 
 ```powershell
